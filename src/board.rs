@@ -32,7 +32,11 @@ impl Default for PieceType {
 #[derive(Copy,Clone,PartialEq)]
 enum GameResult {
     Active,
-    Draw,
+    DrawAgreement,
+    DrawThreefold,
+    Draw50Moves,
+    DrawInsufficientMaterial,
+    DrawTimeoutInsufficientMaterial,
     WhiteTime,
     WhiteResign,
     WhiteCheckmate,
@@ -55,7 +59,7 @@ struct Board {
     squares: [Square; 64],
     to_play: Color,
     castling: (bool, bool, bool, bool), // KQkq
-    en_passant: (bool,usize,usize),
+    en_passant: (bool,usize,usize), // flag, coords behind pawn to be captured
     halfmove_clock: u16,
     fullmove_number: u16,
     result: GameResult,
@@ -63,7 +67,7 @@ struct Board {
 
 impl Board {
     const PIECE_MAP: [char; 7] = ['.', 'P', 'R', 'N', 'B', 'Q', 'K'];
-    const START_FEN: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    const START_FEN: &'static str = "rnbqkbnr/pppppppp/8/8/4R3/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
     fn print_board(&self)->String {
         let mut index: PieceType;
@@ -97,7 +101,11 @@ impl Board {
                                       },
                                       match self.result {
                                           GameResult::Active=>"...",
-                                          GameResult::Draw=>"draw",
+                                          GameResult::DrawAgreement=>"Draw by mutual agreement",
+                                          GameResult::DrawThreefold=>"Three-fold repetition - draw.",
+                                          GameResult::Draw50Moves=>"50 moves w/o capture or pawn move - draw.",
+                                          GameResult::DrawInsufficientMaterial=>"Insufficient material - draw.",
+                                          GameResult::DrawTimeoutInsufficientMaterial=>"Timeout & insufficient material - draw.",
                                           GameResult::WhiteTime=>"Black timed out, white is victorious.",
                                           GameResult::WhiteResign=>"Black resigned, white is victorious.",
                                           GameResult::WhiteCheckmate=>"Checkmate, white is victorious.",
@@ -110,6 +118,88 @@ impl Board {
 
 
         return board_string;
+    }
+
+    fn get_sliding_squares(&self, loc: (i16, i16), piece: PieceType)->Vec<((i16,i16), (i16,i16))> {
+        let start_index: i16 = loc.0 * 8 + loc.1;
+        let start_sq = self.squares[start_index as usize];
+
+        let mut moves: Vec<((i16,i16), (i16,i16))> = Vec::new();
+        let mut index: i16 = 0;
+        let mut eob_flag: bool = false;
+        
+        let mut target_loc: (i16, i16);
+        let mut target_index: i16;
+        let mut target: Square;
+
+        let mut incs: Vec<i16> = Vec::new();
+        let rook_incs: Vec<i16> = vec![8, -8, 1, -1];
+        let bishop_incs: Vec<i16> = vec![9, 7, -7, -9];
+
+        if piece == PieceType::Rook{
+            incs.extend(&rook_incs);
+        }
+        else if piece == PieceType::Bishop {
+            incs.extend(&bishop_incs);
+        }
+        else if piece == PieceType::Queen {
+            incs.extend(&rook_incs);
+            incs.extend(&bishop_incs);
+        }
+
+        for inc in incs{ // down, up, left, right
+            eob_flag = false;
+            loop {
+                index += inc;
+                target_index = start_index + index;
+
+                if      (start_index + index < 0) 
+                     || (start_index + index >= 64)
+                     || eob_flag {
+                         println!("EOB at index {}", target_index);
+                         break;
+                     }
+
+                if (start_index + index) & 7 == 0 || (start_index + index & 7 == 7) { // mod 8 hack
+                    eob_flag = true;
+                }
+                
+                target_loc = (target_index >> 3, target_index - (target_index & 0x7ff8));
+                target = self.squares[(target_index) as usize];
+                if target.color == start_sq.color {
+                    println!("Friendly at index {}", target_index);
+                    break;
+                }
+                else if (target.color != start_sq.color) && (target.color != Color::Empty) {
+                    moves.push((loc, target_loc));
+                    println!("Enemy at index {}", target_index);
+                    break;
+                }
+                println!("Empty Square at index {}", target_index);
+                moves.push((loc, target_loc));
+            }
+            index = 0;
+        }
+        
+        println!("Generated {} sliding moves", moves.len());
+        for m in moves.iter() {
+            let x: &((i16,i16),(i16,i16)) = m;
+            println!("{:?}", x);
+        }
+
+        return moves
+    }
+
+    fn get_rook_squares(&self, loc: (i16, i16))->Vec<((i16,i16), (i16,i16))> {
+        return self.get_sliding_squares(loc, PieceType::Rook);
+    }
+
+    fn get_bishop_squares(&self, loc: (i16, i16))->Vec<((i16,i16), (i16,i16))>  {
+        return self.get_sliding_squares(loc, PieceType::Bishop);
+    }
+    
+    fn get_queen_squares(&self, loc: (i16, i16))->Vec<((i16,i16), (i16,i16))> {
+        return self.get_sliding_squares(loc, PieceType::Queen);
     }
 
     fn from_fen(fen_string: &str)->Result<Board, i16> {
@@ -236,4 +326,7 @@ fn main() {
     println!("board has been initialized from FEN string: {}\n", Board::START_FEN);
     println!("{}", board);
 
+    board.get_rook_squares((4,4));
+    board.get_bishop_squares((4,4));
+    board.get_queen_squares((4,4));
 }

@@ -67,7 +67,7 @@ struct Board {
 
 impl Board {
     const PIECE_MAP: [char; 7] = ['.', 'P', 'R', 'N', 'B', 'Q', 'K'];
-    const START_FEN: &'static str = "rnbqkbnr/pppppppp/8/8/4R3/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    const START_FEN: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
     fn print_board(&self)->String {
         let mut index: PieceType;
@@ -156,7 +156,6 @@ impl Board {
                 if      (start_index + index < 0) 
                      || (start_index + index >= 64)
                      || eob_flag {
-                         println!("EOB at index {}", target_index);
                          break;
                      }
 
@@ -167,25 +166,17 @@ impl Board {
                 target_loc = (target_index >> 3, target_index - (target_index & 0x7ff8));
                 target = self.squares[(target_index) as usize];
                 if target.color == start_sq.color {
-                    println!("Friendly at index {}", target_index);
                     break;
                 }
                 else if (target.color != start_sq.color) && (target.color != Color::Empty) {
                     moves.push((loc, target_loc));
-                    println!("Enemy at index {}", target_index);
                     break;
                 }
-                println!("Empty Square at index {}", target_index);
                 moves.push((loc, target_loc));
             }
             index = 0;
         }
         
-        println!("Generated {} sliding moves", moves.len());
-        for m in moves.iter() {
-            let x: &((i16,i16),(i16,i16)) = m;
-            println!("{:?}", x);
-        }
 
         return moves
     }
@@ -200,6 +191,77 @@ impl Board {
     
     fn get_queen_squares(&self, loc: (i16, i16))->Vec<((i16,i16), (i16,i16))> {
         return self.get_sliding_squares(loc, PieceType::Queen);
+    }
+
+    fn get_knight_squares(&self, loc: (i16, i16))->Vec<((i16, i16), (i16, i16))> {
+        let start_index: i16 = loc.0 * 8 + loc.1;
+        let start_sq = self.squares[start_index as usize];
+        let mut target_sq: Square;
+        let mut target_index: i16;
+        let mut target_loc: (i16, i16) = (0,0);
+        let mut moves: Vec<((i16,i16), (i16,i16))> = Vec::new();
+        let mut index_horiz_shift: i16;
+        let mut dist_closest_edge: i16;
+    
+        for inc in [-10, -6, -17, -15, 6, 10, 16, 17] { // all knight moves
+            target_index = start_index + inc;
+            target_loc = (target_index >> 3, target_index - (target_index & 0x7ff8));
+            index_horiz_shift = target_loc.1 - loc.1;
+
+            if (loc.1 < 4) {
+                dist_closest_edge = loc.1;
+            } else {
+                dist_closest_edge = 8 - loc.1;
+            }
+            
+            if (target_index < 0)
+            || (target_index >= 64)
+            || (index_horiz_shift.abs() > dist_closest_edge) {
+                continue;
+            }
+
+            target_sq = self.squares[target_index as usize];
+
+            if target_sq.color == start_sq.color {
+                continue;
+            }
+
+            moves.push((loc, target_loc));
+        }
+        
+        return moves;
+    }
+    
+    fn get_king_squares(&self, loc: (i16, i16))->Vec<((i16, i16), (i16, i16))> {
+        let start_index: i16 = loc.0 * 8 + loc.1;
+        let start_sq = self.squares[start_index as usize];
+        let mut target_sq: Square;
+        let mut target_index: i16;
+        let mut target_loc: (i16, i16) = (0,0);
+        let mut moves: Vec<((i16,i16), (i16,i16))> = Vec::new();
+        let mut index_horiz_shift: i16;
+        let mut dist_closest_edge: i16;
+    
+        for inc in [-9,-8,-7,-1,1,7,8,9] { // all king moves
+            target_index = start_index + inc;
+            target_loc = (target_index >> 3, target_index - (target_index & 0x7ff8));
+
+            if ((target_loc.1 - loc.1).abs() > 1)
+            || (target_index < 0)
+            || (target_index >= 64) {
+                continue;
+            }
+
+            target_sq = self.squares[target_index as usize];
+
+            if target_sq.color == start_sq.color {
+                continue;
+            }
+
+            moves.push((loc, target_loc));
+        }
+        
+        return moves;
     }
 
     fn from_fen(fen_string: &str)->Result<Board, i16> {
@@ -326,7 +388,4 @@ fn main() {
     println!("board has been initialized from FEN string: {}\n", Board::START_FEN);
     println!("{}", board);
 
-    board.get_rook_squares((4,4));
-    board.get_bishop_squares((4,4));
-    board.get_queen_squares((4,4));
 }

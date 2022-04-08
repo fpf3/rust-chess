@@ -55,6 +55,12 @@ struct Square {
     piece: PieceType,
 }
 
+struct Move {
+    from: (i16, i16),
+    to:   (i16, i16),
+    set_enpassant: (bool, i16, i16),
+}
+
 struct Board {
     squares: [Square; 64],
     to_play: Color,
@@ -120,11 +126,11 @@ impl Board {
         return board_string;
     }
 
-    fn get_sliding_squares(&self, loc: (i16, i16), piece: PieceType)->Vec<((i16,i16), (i16,i16))> {
+    fn get_sliding_squares(&self, loc: (i16, i16), piece: PieceType)->Vec<Move> {
         let start_index: i16 = loc.0 * 8 + loc.1;
         let start_sq = self.squares[start_index as usize];
 
-        let mut moves: Vec<((i16,i16), (i16,i16))> = Vec::new();
+        let mut moves: Vec<Move> = Vec::new();
         let mut index: i16 = 0;
         let mut eob_flag: bool = false;
         
@@ -133,6 +139,7 @@ impl Board {
         let mut target: Square;
 
         let mut incs: Vec<i16> = Vec::new();
+        let mut newmove: Move;
         let rook_incs: Vec<i16> = vec![8, -8, 1, -1];
         let bishop_incs: Vec<i16> = vec![9, 7, -7, -9];
 
@@ -165,43 +172,50 @@ impl Board {
                 
                 target_loc = (target_index >> 3, target_index - (target_index & 0x7ff8));
                 target = self.squares[(target_index) as usize];
+
+                newmove = Move {
+                    from: loc,
+                    to: target_loc,
+                    set_enpassant: (false, 0, 0),
+                };
+
                 if target.color == start_sq.color {
                     break;
                 }
                 else if (target.color != start_sq.color) && (target.color != Color::Empty) {
-                    moves.push((loc, target_loc));
+                    moves.push(newmove);
                     break;
                 }
-                moves.push((loc, target_loc));
+                moves.push(newmove);
             }
             index = 0;
         }
-        
 
         return moves
     }
 
-    fn get_rook_squares(&self, loc: (i16, i16))->Vec<((i16,i16), (i16,i16))> {
+    fn get_rook_squares(&self, loc: (i16, i16))->Vec<Move> {
         return self.get_sliding_squares(loc, PieceType::Rook);
     }
 
-    fn get_bishop_squares(&self, loc: (i16, i16))->Vec<((i16,i16), (i16,i16))>  {
+    fn get_bishop_squares(&self, loc: (i16, i16))->Vec<Move>  {
         return self.get_sliding_squares(loc, PieceType::Bishop);
     }
     
-    fn get_queen_squares(&self, loc: (i16, i16))->Vec<((i16,i16), (i16,i16))> {
+    fn get_queen_squares(&self, loc: (i16, i16))->Vec<Move> {
         return self.get_sliding_squares(loc, PieceType::Queen);
     }
 
-    fn get_knight_squares(&self, loc: (i16, i16))->Vec<((i16, i16), (i16, i16))> {
+    fn get_knight_squares(&self, loc: (i16, i16))->Vec<Move> {
         let start_index: i16 = loc.0 * 8 + loc.1;
         let start_sq = self.squares[start_index as usize];
         let mut target_sq: Square;
         let mut target_index: i16;
         let mut target_loc: (i16, i16) = (0,0);
-        let mut moves: Vec<((i16,i16), (i16,i16))> = Vec::new();
+        let mut moves: Vec<Move> = Vec::new();
         let mut index_horiz_shift: i16;
         let mut dist_closest_edge: i16;
+        let mut newmove: Move;
     
         for inc in [-10, -6, -17, -15, 6, 10, 16, 17] { // all knight moves
             target_index = start_index + inc;
@@ -226,21 +240,26 @@ impl Board {
                 continue;
             }
 
-            moves.push((loc, target_loc));
+            moves.push(Move {
+                from: loc,
+                to: target_loc,
+                set_enpassant: (false, 0, 0),
+            });
         }
         
         return moves;
     }
     
-    fn get_king_squares(&self, loc: (i16, i16))->Vec<((i16, i16), (i16, i16))> {
+    fn get_king_squares(&self, loc: (i16, i16))->Vec<Move> {
         let start_index: i16 = loc.0 * 8 + loc.1;
         let start_sq = self.squares[start_index as usize];
         let mut target_sq: Square;
         let mut target_index: i16;
         let mut target_loc: (i16, i16) = (0,0);
-        let mut moves: Vec<((i16,i16), (i16,i16))> = Vec::new();
+        let mut moves: Vec<Move> = Vec::new();
         let mut index_horiz_shift: i16;
         let mut dist_closest_edge: i16;
+        let mut newmove: Move;
     
         for inc in [-9,-8,-7,-1,1,7,8,9] { // all king moves
             target_index = start_index + inc;
@@ -258,7 +277,11 @@ impl Board {
                 continue;
             }
 
-            moves.push((loc, target_loc));
+            moves.push(Move{
+                from: loc,
+                to: target_loc,
+                set_enpassant: (false, 0, 0),
+            });
         }
         
         return moves;

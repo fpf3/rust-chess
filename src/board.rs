@@ -142,6 +142,10 @@ impl Board {
         let mut newmove: Move;
         let rook_incs: Vec<i16> = vec![8, -8, 1, -1];
         let bishop_incs: Vec<i16> = vec![9, 7, -7, -9];
+        
+        if self.squares[start_index].color == Color::Empty {
+            return moves;
+        }
 
         if piece == PieceType::Rook{
             incs.extend(&rook_incs);
@@ -216,6 +220,10 @@ impl Board {
         let mut index_horiz_shift: i16;
         let mut dist_closest_edge: i16;
         let mut newmove: Move;
+        
+        if self.squares[start_index].color == Color::Empty {
+            return moves;
+        }
     
         for inc in [-10, -6, -17, -15, 6, 10, 16, 17] { // all knight moves
             target_index = start_index + inc;
@@ -260,6 +268,10 @@ impl Board {
         let mut index_horiz_shift: i16;
         let mut dist_closest_edge: i16;
         let mut newmove: Move;
+
+        if self.squares[start_index].color == Color::Empty {
+            return moves;
+        }
     
         for inc in [-9,-8,-7,-1,1,7,8,9] { // all king moves
             target_index = start_index + inc;
@@ -285,6 +297,43 @@ impl Board {
         }
         
         return moves;
+    }
+
+    fn get_pawn_squares(&self, loc: (i16, i16))->Vec<Move> {
+        let start_index: i16 = loc.0 * 8 + loc.1;
+        let start_sq = self.squares[start_index as usize];
+        let mut target_sq: Square;
+        let mut target_index: i16;
+        let mut target_loc: (i16, i16) = (0,0);
+        let mut moves: Vec<Move> = Vec::new();
+        let mut index_horiz_shift: i16;
+        let mut dist_closest_edge: i16;
+        let mut newmove: Move;
+        let mut double_advance: bool = false;
+        let mut pass_enpassant: bool = false;
+
+        let direction: i16 = match self.squares[start_index].color{
+            Color::White => -1,
+            Color::Black => 1,
+            Color::Empty => 0,
+        }
+
+        if !direction {
+            return moves;
+        }
+
+        if (self.squares[start_index].color == Color::White && loc.1 == 6)
+        || (self.squares[start_index].color == Color::Black && loc.1 == 1) {
+            double_advance = true;
+        }
+        
+        target_index = start_index + 8 * direction;
+        if target_index < 64 && target_index >= 0 { // pawn can move forward
+
+        }
+
+        if self.en_passant { // can we take en-passant? 
+        }
     }
 
     fn from_fen(fen_string: &str)->Result<Board, i16> {
@@ -407,7 +456,7 @@ fn main() {
     println!("ahhh yes... chess.");
     println!("{}", board);
 
-    board = Board::fide_init().unwrap();
+    board = Board::from_fen("r1n1kn1r/bP1bqpP1/NB1nq1BN/Qq2n1qQ/1N4N1/2Q2Q2/3RR3/3K4 w - - 0 1").unwrap();
     println!("board has been initialized from FEN string: {}\n", Board::START_FEN);
     println!("{}", board);
 

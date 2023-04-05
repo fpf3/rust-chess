@@ -82,7 +82,7 @@ impl Board {
         let mut board_string: String = "".to_string();
         for i in 0..8 {
             for j in 0..8{
-                square = &self.squares[i*8+j];
+                square = &self.squares[(i*8+j) as usize];
                 index = square.piece;
                 color = square.color;
                 if color == Color::White {
@@ -143,7 +143,7 @@ impl Board {
         let rook_incs: Vec<i16> = vec![8, -8, 1, -1];
         let bishop_incs: Vec<i16> = vec![9, 7, -7, -9];
         
-        if self.squares[start_index].color == Color::Empty {
+        if self.squares[start_index as usize].color == Color::Empty {
             return moves;
         }
 
@@ -221,7 +221,7 @@ impl Board {
         let mut dist_closest_edge: i16;
         let mut newmove: Move;
         
-        if self.squares[start_index].color == Color::Empty {
+        if self.squares[start_index as usize].color == Color::Empty {
             return moves;
         }
     
@@ -269,7 +269,7 @@ impl Board {
         let mut dist_closest_edge: i16;
         let mut newmove: Move;
 
-        if self.squares[start_index].color == Color::Empty {
+        if self.squares[start_index as usize].color == Color::Empty {
             return moves;
         }
     
@@ -312,28 +312,57 @@ impl Board {
         let mut double_advance: bool = false;
         let mut pass_enpassant: bool = false;
 
-        let direction: i16 = match self.squares[start_index].color{
+        let direction: i16 = match self.squares[start_index as usize].color{
             Color::White => -1,
             Color::Black => 1,
             Color::Empty => 0,
-        }
+        };
 
         if !direction {
             return moves;
         }
 
-        if (self.squares[start_index].color == Color::White && loc.1 == 6)
-        || (self.squares[start_index].color == Color::Black && loc.1 == 1) {
+        if (self.squares[start_index as usize].color == Color::White && loc.1 == 6)
+        || (self.squares[start_index as usize].color == Color::Black && loc.1 == 1) {
             double_advance = true;
         }
         
         target_index = start_index + 8 * direction;
-        if target_index < 64 && target_index >= 0 { // pawn can move forward
+        if target_index < 64 && target_index >= 0 && self.squares[target_index as usize].color == Color::Empty{ // pawn can move forward
+            moves.push(Move{
+                from: start_index,
+                to: target_index,
+                set_enpassant: (false, 0, 0),
+            });
 
+            target_index += 8*direction;
+            if double_advance && self.squares[target_index as usize].color == Color::Empty { // We can double advance
+                if (start_index % 8) != 7{
+                    if self.board.squares[target_index+1].color != Color::Empty && self.board.squares[target_index+1] != self.board.squares[start_index].color {
+                        moves.push(Move{
+                            from: start_index,
+                            to: target_index,
+                            set_enpassant: (true, (target_index-8*direction)%8, (target_index-8*direction)/8),
+                        });
+                    }
+                } else if start_index % 8 != 0 {
+                    if self.board.squares[target_index-1].color != Color::Empty && self.board.squares[target_index-1] != self.board.squares[start_index].color {
+                        moves.push(Move{
+                            from: start_index,
+                            to: target_index,
+                            set_enpassant: (true, (target_index-8*direction)%8, (target_index-8*direction)/8),
+                        });
+                } else {
+                    moves.push(Move{
+                        from: start_index,
+                        to: target_index,
+                        set_enpassant: (false, 0, 0),
+                    });
+                }
+            }
         }
 
-        if self.en_passant { // can we take en-passant? 
-        }
+        moves
     }
 
     fn from_fen(fen_string: &str)->Result<Board, i16> {
@@ -459,5 +488,4 @@ fn main() {
     board = Board::from_fen("r1n1kn1r/bP1bqpP1/NB1nq1BN/Qq2n1qQ/1N4N1/2Q2Q2/3RR3/3K4 w - - 0 1").unwrap();
     println!("board has been initialized from FEN string: {}\n", Board::START_FEN);
     println!("{}", board);
-
 }

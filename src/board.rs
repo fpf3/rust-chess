@@ -402,55 +402,51 @@ impl Board {
         moves
     }
 
-    /*
-    fn get_knight_squares(&self, loc: (i16, i16))->Vec<MoveOp> {
-        let start_index: i16 = loc.0 * 8 + loc.1;
-        let start_sq = self.squares[start_index as usize];
-        let mut target_sq: Square;
-        let mut target_index: i16;
-        let mut target_loc: (i16, i16) = (0,0);
-        let mut moves: Vec<Move> = Vec::new();
-        let mut index_horiz_shift: i16;
-        let mut dist_closest_edge: i16;
-        let mut newmove: Move;
+    fn get_knight_squares(&self)->Vec<MoveOp> {
+        let indices = self.get_table(PieceType::Knight);
+        let mut moves: Vec<MoveOp> = Vec::new();
+
+        for &start_index in indices {
+            let start_sq = self.squares[start_index as usize];
+            let mut target_sq: Square;
+            let mut index_horiz_shift: i16;
+            let mut dist_closest_edge: i16;
+            let mut newmove: MoveOp;
+            let incs: Vec<i16> = vec![-10, -6, -17, -15, 6, 10, 16, 17];
+            let loc = ((start_index as i16) >> 3, (start_index as i16) - ((start_index as i16) & 0x7ff8));
         
-        if self.squares[start_index as usize].piece == PieceType::Empty {
-            return moves;
-        }
-    
-        for inc in [-10, -6, -17, -15, 6, 10, 16, 17] { // all knight moves
-            target_index = start_index + inc;
-            target_loc = (target_index >> 3, target_index - (target_index & 0x7ff8));
-            index_horiz_shift = target_loc.1 - loc.1;
+            for inc in incs { // all knight moves
+                let target_index = ((start_index as i16) + inc) as usize;
+                let target_loc = ((target_index as i16) >> 3, (target_index as i16) - ((target_index as i16) & 0x7ff8));
+                index_horiz_shift = target_loc.1 - loc.1;
 
-            if (loc.1 < 4) {
-                dist_closest_edge = loc.1;
-            } else {
-                dist_closest_edge = 8 - loc.1;
+                if loc.1 < 4 {
+                    dist_closest_edge = loc.1;
+                } else {
+                    dist_closest_edge = 8 - loc.1;
+                }
+                
+                if target_index >= self.shape.0 * self.shape.1
+                || index_horiz_shift.abs() > dist_closest_edge {
+                    continue;
+                }
+
+                target_sq = self.squares[target_index as usize];
+
+                if target_sq.color == start_sq.color {
+                    continue;
+                }
+
+                moves.push(MoveOp {
+                    from: start_index,
+                    to: target_index,
+                    set_enpassant: (false, 0),
+                });
             }
-            
-            if (target_index < 0)
-            || (target_index >= 64)
-            || (index_horiz_shift.abs() > dist_closest_edge) {
-                continue;
-            }
-
-            target_sq = self.squares[target_index as usize];
-
-            if target_sq.color == start_sq.color {
-                continue;
-            }
-
-            moves.push(Move {
-                from: loc,
-                to: target_loc,
-                set_enpassant: (false, 0, 0),
-            });
         }
         
-        return moves;
+        moves
     }
-    */
     
     fn get_king_squares(&self, loc: (i16, i16))->Vec<MoveOp> {
         let indices = self.get_table(PieceType::King);

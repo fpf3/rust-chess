@@ -6,8 +6,9 @@ use lazy_static::lazy_static;
 
 const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const PIECE_MAP: [char; 7] = ['.', 'P', 'R', 'N', 'B', 'Q', 'K'];
+macro_rules! CORRUPT_BOARD_PANIC_MSG{()=>("board hash tables corrupted, bailing...")}
 
-#[derive(Copy,Clone,PartialEq)]
+#[derive(Copy,Clone,Eq,PartialEq)]
 enum Color {
     White,
     Black,
@@ -17,7 +18,7 @@ impl Default for Color {
     fn default() -> Self { Color::White } // Used to have Color::Empty, but I think it makes more sense for that to live in PieceType...
 }
 
-#[derive(Copy,Clone,PartialEq)]
+#[derive(Copy,Clone,Eq,Hash,PartialEq)]
 enum PieceType {
     Empty,
     Pawn,
@@ -32,7 +33,7 @@ impl Default for PieceType {
     fn default() -> Self { PieceType::Empty }
 }
 
-#[derive(Copy,Clone,PartialEq)]
+#[derive(Copy,Clone,Eq,PartialEq)]
 enum GameResult {
     Active,
     DrawAgreement,
@@ -52,25 +53,26 @@ impl Default for GameResult {
     fn default() -> Self { GameResult::Active }
 }
 
-#[derive(Default,Copy,Clone)]
+#[derive(Default,Copy,Clone,Eq,PartialEq)]
 struct Square {
     color: Color,
     piece: PieceType,
 }
 
-struct Move {
-    from: (i16, i16),
-    to:   (i16, i16),
-    set_enpassant: (bool, i16, i16),
+struct MoveOp {
+    from: usize,
+    to:   usize,
+    set_enpassant: (bool, usize),
 }
 
+#[derive(Clone)]
 struct Board {
     squares: Vec<Square>,
-    shape: (u16, u16), // (height, width)
-    piece_map: HashMap<PieceType, Vec<u16>>,
+    shape: (usize, usize), // (height, width)
+    piece_map: HashMap<PieceType, Vec<usize>>,
     to_play: Color,
     castling: (bool, bool, bool, bool), // KQkq
-    en_passant: (bool,u16), // flag, coords behind pawn to be captured
+    en_passant: (bool,usize), // flag, coords behind pawn to be captured
     halfmove_clock: u16,
     fullmove_number: u16,
     result: GameResult,
@@ -82,8 +84,8 @@ impl Board {
         let mut square: &Square;
         let mut color: Color;
         let mut board_string: String = "".to_string();
-        let height: usize = self.shape.0 as usize;
-        let width: usize = self.shape.1 as usize;
+        let height: usize = self.shape.0;
+        let width: usize = self.shape.1;
         for i in 0..height {
             for j in 0..width{
                 square = &self.squares[i*width+j];
@@ -147,10 +149,10 @@ impl Board {
         board_string
     }
 
-    fn alg_to_index(&self, alg_notation: &str)->u16{
+    fn alg_to_index(&self, alg_notation: &str)->usize{
         let c_str = alg_notation.as_bytes();
-        let file: u16 = (c_str[0] - 48) as u16;
-        let rank: u16 = (c_str[1] - 48) as u16;
+        let file = (c_str[0] - 48) as usize;
+        let rank = (c_str[1] - 48) as usize;
         
         rank*self.shape.1 + file
     }
@@ -221,6 +223,8 @@ impl Board {
             }
         }
 
+        new_board.populate_map();
+
         // set board state
         if toplay == "w" {
             new_board.to_play = Color::White;
@@ -258,6 +262,299 @@ impl Board {
         Ok(new_board)
     }
 
+    fn search_piece(&self, p: PieceType) -> Vec<usize>{
+        self.squares.iter().enumerate().filter_map(|s| {
+            if p == s.1.piece {
+                Some(s.0 as usize)
+            } else {
+                None
+            }
+        }).collect::<Vec<_>>()
+    }
+
+    fn get_table(&self, p: PieceType) -> &Vec<usize>{
+        match self.piece_map.get(&p){
+            Some(p) => p,
+            None => panic!(CORRUPT_BOARD_PANIC_MSG!()),
+        }
+    }
+    
+    fn get_mut_table(&mut self, p: PieceType) -> &mut Vec<usize>{
+        match self.piece_map.get_mut(&p){
+            Some(p) => p,
+            None => panic!(CORRUPT_BOARD_PANIC_MSG!()),
+        }
+    }
+
+    fn get_table_index(table: &Vec<usize>, val: usize) -> usize {
+        match table.iter().position(|&r| r == val){
+            Some(x) => x,
+            None => panic!(CORRUPT_BOARD_PANIC_MSG!()),
+        }
+    }
+
+    fn populate_map(&mut self) {
+        self.piece_map = HashMap::from([
+            (PieceType::King, self.search_piece(PieceType::King)),
+            (PieceType::Queen, self.search_piece(PieceType::Queen)),
+            (PieceType::Bishop, self.search_piece(PieceType::Bishop)),
+            (PieceType::Knight, self.search_piece(PieceType::Knight)),
+            (PieceType::Rook, self.search_piece(PieceType::Rook)),
+            (PieceType::Pawn, self.search_piece(PieceType::Pawn)),
+        ]);
+    }
+
+    fn apply_move(&mut self, moveop: MoveOp){
+        let from_table = self.get_mut_table(self.squares[moveop.from].piece);
+
+        let from_index = Self::get_table_index(from_table, moveop.from);
+        
+        from_table[from_index] = moveop.to;
+    
+        if self.squares[moveop.to].piece != PieceType::Empty { // remove a captured piece from the hash table
+            let to_table = self.get_mut_table(self.squares[moveop.to].piece);
+
+            let to_index = Self::get_table_index(to_table, moveop.to);
+
+            to_table.remove(to_index);
+        }
+
+        self.squares[moveop.to] = self.squares[moveop.from];
+        self.squares[moveop.from].piece = PieceType::Empty;
+    }
+
+    fn apply_move_nomut(&self, moveop: MoveOp) -> Self {
+        let mut child: Self = self.clone();
+        child.apply_move(moveop);
+
+        child
+    }
+
+    fn get_sliding_squares(&self, piece: PieceType)->Vec<MoveOp> {
+        let indices: &Vec<usize> = self.get_table(piece);
+        let mut moves: Vec<MoveOp> = Vec::new();
+
+        let height = self.shape.0;
+        let width = self.shape.1;
+
+        for &start_index in indices {
+            let start_sq = self.squares[start_index];
+
+            let mut index: i16 = 0;
+            let mut eob_flag: bool = false;
+            
+            let mut target: Square;
+
+            let mut incs: Vec<i16> = Vec::new();
+            let mut newmove: MoveOp;
+            let rook_incs: Vec<i16> = vec![8, -8, 1, -1];
+            let bishop_incs: Vec<i16> = vec![9, 7, -7, -9];
+
+            if piece == PieceType::Rook{
+                incs.extend(&rook_incs);
+            }
+            else if piece == PieceType::Bishop {
+                incs.extend(&bishop_incs);
+            }
+            else if piece == PieceType::Queen {
+                incs.extend(&rook_incs);
+                incs.extend(&bishop_incs);
+            }
+
+            for inc in incs{ // down, up, left, right
+                eob_flag = false;
+                loop {
+                    index += inc;
+                    let target_index = ((start_index as i16) + index) as usize;
+
+                    if      (target_index < 0) 
+                         || (target_index >= self.shape.0 * self.shape.1)
+                         || eob_flag {
+                             break;
+                         }
+
+                    if target_index % self.shape.1 == 0|| target_index % self.shape.1 == self.shape.1 - 1 {
+                        eob_flag = true;
+                    }
+                    
+                    target = self.squares[target_index];
+                    
+                    if target.color == start_sq.color {
+                        break;
+                    }
+
+                    newmove = MoveOp {
+                        from: start_index,
+                        to: target_index,
+                        set_enpassant: (false, 0),
+                    };
+
+                    if (target.color != start_sq.color) && (target.piece != PieceType::Empty) {
+                        moves.push(newmove);
+                        break;
+                    }
+                    index = 0;
+                }
+                index = 0;
+            }
+        }
+
+        moves
+    }
+
+    /*
+    fn get_knight_squares(&self, loc: (i16, i16))->Vec<MoveOp> {
+        let start_index: i16 = loc.0 * 8 + loc.1;
+        let start_sq = self.squares[start_index as usize];
+        let mut target_sq: Square;
+        let mut target_index: i16;
+        let mut target_loc: (i16, i16) = (0,0);
+        let mut moves: Vec<Move> = Vec::new();
+        let mut index_horiz_shift: i16;
+        let mut dist_closest_edge: i16;
+        let mut newmove: Move;
+        
+        if self.squares[start_index as usize].piece == PieceType::Empty {
+            return moves;
+        }
+    
+        for inc in [-10, -6, -17, -15, 6, 10, 16, 17] { // all knight moves
+            target_index = start_index + inc;
+            target_loc = (target_index >> 3, target_index - (target_index & 0x7ff8));
+            index_horiz_shift = target_loc.1 - loc.1;
+
+            if (loc.1 < 4) {
+                dist_closest_edge = loc.1;
+            } else {
+                dist_closest_edge = 8 - loc.1;
+            }
+            
+            if (target_index < 0)
+            || (target_index >= 64)
+            || (index_horiz_shift.abs() > dist_closest_edge) {
+                continue;
+            }
+
+            target_sq = self.squares[target_index as usize];
+
+            if target_sq.color == start_sq.color {
+                continue;
+            }
+
+            moves.push(Move {
+                from: loc,
+                to: target_loc,
+                set_enpassant: (false, 0, 0),
+            });
+        }
+        
+        return moves;
+    }
+    */
+    
+    fn get_king_squares(&self, loc: (i16, i16))->Vec<MoveOp> {
+        let indices = self.get_table(PieceType::King);
+        let mut moves: Vec<MoveOp> = Vec::new();
+        for &start_index in indices {
+            let mut newmove: MoveOp;
+
+            let start_sq = self.squares[start_index];
+            let incs: Vec<i16> = vec![-9, -8, -7, -1, 1, 7, 8, 9];
+        
+            for inc in incs { // all king moves
+                let target_index = ((start_index as i16) + inc) as usize;
+                let target_loc: (i16, i16) = ((target_index as i16) >> 3, (target_index as i16) - ((target_index as i16) & 0x7ff8));
+                let loc: (i16, i16) = ((start_index as i16) >> 3, (target_index as i16) - ((target_index as i16) & 0x7ff8));
+
+                if ((target_loc.1 - loc.1).abs() > 1)
+                || (target_index >= self.shape.0 * self.shape.1) {
+                    continue;
+                }
+
+                let target_sq = self.squares[target_index];
+
+                if target_sq.color == start_sq.color {
+                    continue;
+                }
+
+                moves.push(MoveOp{
+                    from: start_index,
+                    to: target_index,
+                    set_enpassant: (false, 0),
+                });
+            }
+        }
+        
+        moves
+    }
+
+    /*
+    fn get_pawn_squares(&self, loc: (i16, i16))->Vec<Move> {
+        let start_index: i16 = loc.0 * 8 + loc.1;
+        let start_sq = self.squares[start_index as usize];
+        let mut target_sq: Square;
+        let mut target_index: i16;
+        let mut target_loc: (i16, i16) = (0,0);
+        let mut moves: Vec<Move> = Vec::new();
+        let mut index_horiz_shift: i16;
+        let mut dist_closest_edge: i16;
+        let mut newmove: Move;
+        let mut double_advance: bool = false;
+        let mut pass_enpassant: bool = false;
+
+        let direction: i16 = match self.squares[start_index as usize].color{
+            Color::White => -1,
+            Color::Black => 1,
+            Color::Empty => 0,
+        };
+
+        if !direction {
+            return moves;
+        }
+
+        if (self.squares[start_index as usize].color == Color::White && loc.1 == 6)
+        || (self.squares[start_index as usize].color == Color::Black && loc.1 == 1) {
+            double_advance = true;
+        }
+        
+        target_index = start_index + 8 * direction;
+        if target_index < 64 && target_index >= 0 && self.squares[target_index as usize].color == Color::Empty{ // pawn can move forward
+            moves.push(Move{
+                from: start_index,
+                to: target_index,
+                set_enpassant: (false, 0, 0),
+            });
+
+            target_index += 8*direction;
+            if double_advance && self.squares[target_index as usize].color == Color::Empty { // We can double advance
+                if (start_index % 8) != 7{
+                    if self.board.squares[target_index+1].color != Color::Empty && self.board.squares[target_index+1] != self.board.squares[start_index].color {
+                        moves.push(Move{
+                            from: start_index,
+                            to: target_index,
+                            set_enpassant: (true, (target_index-8*direction)%8, (target_index-8*direction)/8),
+                        });
+                    }
+                } else if start_index % 8 != 0 {
+                    if self.board.squares[target_index-1].color != Color::Empty && self.board.squares[target_index-1] != self.board.squares[start_index].color {
+                        moves.push(Move{
+                            from: start_index,
+                            to: target_index,
+                            set_enpassant: (true, (target_index-8*direction)%8, (target_index-8*direction)/8),
+                        });
+                } else {
+                    moves.push(Move{
+                        from: start_index,
+                        to: target_index,
+                        set_enpassant: (false, 0, 0),
+                    });
+                }
+            }
+        }
+
+        moves
+    }
+    */
 }
 
 impl Default for Board {

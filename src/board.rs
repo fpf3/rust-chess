@@ -330,7 +330,7 @@ impl Board {
         child
     }
 
-    fn get_sliding_squares(&self, piece: PieceType)->Vec<MoveOp> {
+    fn get_sliding_moves(&self, piece: PieceType)->Vec<MoveOp> {
         let indices: &Vec<usize> = self.get_table(piece);
         let mut moves: Vec<MoveOp> = Vec::new();
 
@@ -402,7 +402,7 @@ impl Board {
         moves
     }
 
-    fn get_knight_squares(&self)->Vec<MoveOp> {
+    fn get_knight_moves(&self)->Vec<MoveOp> {
         let indices = self.get_table(PieceType::Knight);
         let mut moves: Vec<MoveOp> = Vec::new();
 
@@ -448,7 +448,7 @@ impl Board {
         moves
     }
     
-    fn get_king_squares(&self, loc: (i16, i16))->Vec<MoveOp> {
+    fn get_king_moves(&self)->Vec<MoveOp> {
         let indices = self.get_table(PieceType::King);
         let mut moves: Vec<MoveOp> = Vec::new();
         for &start_index in indices {
@@ -472,7 +472,22 @@ impl Board {
                 if target_sq.color == start_sq.color {
                     continue;
                 }
+/*
+                let enemy_pieces = [
+                    self.get_table(PieceType::King),
+                    self.get_table(PieceType::Queen),
+                    self.get_table(PieceType::Bishop),
+                    self.get_table(PieceType::Knight),
+                    self.get_table(PieceType::Rook),
+                    self.get_table(PieceType::Pawn),
+                ].iter().reduce(|a, b| {
+                    let mut A: &Vec<usize> = a.clone();
+                    let mut B: &Vec<usize> = b.clone();
+                    B.append(A);
 
+                    B
+                });
+ */
                 moves.push(MoveOp{
                     from: start_index,
                     to: target_index,
@@ -485,7 +500,7 @@ impl Board {
     }
 
     /*
-    fn get_pawn_squares(&self, loc: (i16, i16))->Vec<Move> {
+    fn get_pawn_moves(&self, loc: (i16, i16))->Vec<Move> {
         let start_index: i16 = loc.0 * 8 + loc.1;
         let start_sq = self.squares[start_index as usize];
         let mut target_sq: Square;
@@ -551,6 +566,17 @@ impl Board {
         moves
     }
     */
+
+    fn get_all_moves(&self) -> Vec<MoveOp> {
+        let mut moves: Vec<MoveOp> = Vec::new();
+        moves.extend(self.get_king_moves());
+        moves.extend(self.get_sliding_moves(PieceType::Queen));
+        moves.extend(self.get_sliding_moves(PieceType::Bishop));
+        moves.extend(self.get_sliding_moves(PieceType::Rook));
+        moves.extend(self.get_knight_moves());
+        
+        moves
+    }
 }
 
 impl Default for Board {

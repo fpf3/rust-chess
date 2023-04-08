@@ -8,49 +8,37 @@ const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 
 const PIECE_MAP: [char; 7] = ['.', 'P', 'R', 'N', 'B', 'Q', 'K'];
 macro_rules! CORRUPT_BOARD_PANIC_MSG{()=>("board hash tables corrupted, bailing...")}
 
-#[derive(Copy,Clone,Eq,PartialEq)]
-enum Color {
-    White,
-    Black,
+#[derive(Copy,Clone,Eq,PartialEq,Default)]
+pub enum Color {
+    #[default] White,
+               Black,
 }
 
-impl Default for Color {
-    fn default() -> Self { Color::White } // Used to have Color::Empty, but I think it makes more sense for that to live in PieceType...
+#[derive(Copy,Clone,Eq,Hash,PartialEq,Default)]
+pub enum PieceType {
+    #[default] Empty,
+               Pawn,
+               Rook,
+               Knight,
+               Bishop,
+               Queen,
+               King,
 }
 
-#[derive(Copy,Clone,Eq,Hash,PartialEq)]
-enum PieceType {
-    Empty,
-    Pawn,
-    Rook,
-    Knight,
-    Bishop,
-    Queen,
-    King,
-}
-
-impl Default for PieceType {
-    fn default() -> Self { PieceType::Empty }
-}
-
-#[derive(Copy,Clone,Eq,PartialEq)]
-enum GameResult {
-    Active,
-    DrawAgreement,
-    DrawThreefold,
-    Draw50Moves,
-    DrawInsufficientMaterial,
-    DrawTimeoutInsufficientMaterial,
-    WhiteTime,
-    WhiteResign,
-    WhiteCheckmate,
-    BlackTime,
-    BlackResign,
-    BlackCheckmate,
-}
-
-impl Default for GameResult {
-    fn default() -> Self { GameResult::Active }
+#[derive(Copy,Clone,Eq,PartialEq,Default)]
+pub enum GameResult {
+    #[default] Active,
+               DrawAgreement,
+               DrawThreefold,
+               Draw50Moves,
+               DrawInsufficientMaterial,
+               DrawTimeoutInsufficientMaterial,
+               WhiteTime,
+               WhiteResign,
+               WhiteCheckmate,
+               BlackTime,
+               BlackResign,
+               BlackCheckmate,
 }
 
 #[derive(Default,Copy,Clone,Eq,PartialEq)]
@@ -59,19 +47,36 @@ struct Square {
     piece: PieceType,
 }
 
-struct MoveOp {
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct MoveOp {
     from: usize,
     to:   usize,
+    is_enpassant: bool,
+    is_castle: bool,
     set_enpassant: (bool, usize),
+    promote: PieceType,
+}
+
+impl Default for MoveOp {
+    fn default() -> Self {
+        Self {
+            from: 0,
+            to: 0,
+            is_enpassant: false,
+            is_castle: false,
+            set_enpassant: (false, 0),
+            promote: PieceType::Empty,
+        }
+    }
 }
 
 #[derive(Clone)]
-struct Board {
+pub struct Board {
     squares: Vec<Square>,
     shape: (usize, usize), // (height, width)
     piece_map: HashMap<PieceType, Vec<usize>>,
     to_play: Color,
-    castling: (bool, bool, bool, bool), // KQkq
+    castling: ((bool, bool), (bool, bool)), // KQkq
     en_passant: (bool,usize), // flag, coords behind pawn to be captured
     halfmove_clock: u16,
     fullmove_number: u16,
@@ -125,22 +130,22 @@ impl Board {
                                           GameResult::BlackCheckmate=>"Checkmate, black is victorious.",
                                       },
                                       match self.castling {
-                                        (false, false, false, false)    => "----",
-                                        (false, false, false, true)     => "---q",
-                                        (false, false, true, false)     => "--k-",
-                                        (false, false, true, true)      => "--kq",
-                                        (false, true, false, false)     => "-Q--",
-                                        (false, true, false, true)      => "-Q-q",
-                                        (false, true, true, false)      => "-Qk-",
-                                        (false, true, true, true)       => "-Qkq",
-                                        (true, false, false, false)     => "K---",
-                                        (true, false, false, true)      => "K--q",
-                                        (true, false, true, false)      => "K-k-",
-                                        (true, false, true, true)       => "K-kq",
-                                        (true, true, false, false)      => "KQ--",
-                                        (true, true, false, true)       => "KQ-q",
-                                        (true, true, true, false)       => "KQk-",
-                                        (true, true, true, true)        => "KQkq",
+                                        ((false, false), (false, false)) => "----",
+                                        ((false, false), (false, true))  => "---q",
+                                        ((false, false), (true,  false)) => "--k-",
+                                        ((false, false), (true,  true))  => "--kq",
+                                        ((false, true),  (false, false)) => "-Q--",
+                                        ((false, true),  (false, true))  => "-Q-q",
+                                        ((false, true),  (true,  false)) => "-Qk-",
+                                        ((false, true),  (true,  true))  => "-Qkq",
+                                        ((true,  false), (false, false)) => "K---",
+                                        ((true,  false), (false, true))  => "K--q",
+                                        ((true,  false), (true,  false)) => "K-k-",
+                                        ((true,  false), (true,  true))  => "K-kq",
+                                        ((true,  true),  (false, false)) => "KQ--",
+                                        ((true,  true),  (false, true))  => "KQ-q",
+                                        ((true,  true),  (true,  false)) => "KQk-",
+                                        ((true,  true),  (true,  true))  => "KQkq",
                                       }
                                     );
 
@@ -234,19 +239,19 @@ impl Board {
         }
         
         if castling.contains('K') {
-            new_board.castling.0 = true;
+            new_board.castling.0.0 = true;
         }
 
         if castling.contains('Q') {
-            new_board.castling.1 = true;
+            new_board.castling.0.1 = true;
         }
 
         if castling.contains('k') {
-            new_board.castling.2 = true;
+            new_board.castling.1.0 = true;
         }
 
         if castling.contains('q') {
-            new_board.castling.3 = true;
+            new_board.castling.1.1 = true;
         }
 
         new_board.halfmove_clock = halfmove.parse::<u16>().unwrap();
@@ -272,19 +277,28 @@ impl Board {
         }).collect::<Vec<_>>()
     }
 
-    fn get_table(&self, p: PieceType) -> &Vec<usize>{
+    fn get_table(&self, p: PieceType) -> Vec<usize>{
         match self.piece_map.get(&p){
-            Some(p) => p,
+            Some(l) => l.clone(),
             None => panic!(CORRUPT_BOARD_PANIC_MSG!()),
         }
+    }
+
+    fn get_table_colored(&self, p: PieceType, c: Color) -> Vec<usize> {
+        self.get_table(p).into_iter().filter(|&m| self.squares[m].color == c).collect()
     }
     
     fn get_mut_table(&mut self, p: PieceType) -> &mut Vec<usize>{
         match self.piece_map.get_mut(&p){
             Some(p) => p,
-            None => panic!(CORRUPT_BOARD_PANIC_MSG!()),
+            None => panic!(CORRUPT_BOARD_PANIC_MSG!()), 
         }
     }
+
+    /* TODO! This is hard... We need to filter, but preserve the mutable reference.
+    fn get_mut_table_colored(&self, p: PieceType) -> &Vec<usize> {
+        self.get_mut_table(p).into_iter().filter(|&m| self.squares[m].color == self.to_play).collect()
+    }  */
 
     fn get_table_index(table: &Vec<usize>, val: usize) -> usize {
         match table.iter().position(|&r| r == val){
@@ -308,10 +322,13 @@ impl Board {
         let from_table = self.get_mut_table(self.squares[moveop.from].piece);
 
         let from_index = Self::get_table_index(from_table, moveop.from);
+
+        let mut capture: bool = false;
         
         from_table[from_index] = moveop.to;
     
         if self.squares[moveop.to].piece != PieceType::Empty { // remove a captured piece from the hash table
+            capture = true;
             let to_table = self.get_mut_table(self.squares[moveop.to].piece);
 
             let to_index = Self::get_table_index(to_table, moveop.to);
@@ -319,141 +336,221 @@ impl Board {
             to_table.remove(to_index);
         }
 
+        // deal with en passant...
+        if moveop.is_enpassant {
+            capture = true;
+            let backwards_dir: i16 = match self.squares[from_index].color {
+                Color::White =>  1,
+                Color::Black => -1,
+            };
+
+            let target_pawn_index = (moveop.to as i16 + backwards_dir * self.shape.1 as i16) as usize;
+
+            let to_table = self.get_mut_table(PieceType::Pawn);
+            let to_index = Self::get_table_index(to_table, target_pawn_index);
+
+            to_table.remove(to_index);
+        }
+
+        if moveop.set_enpassant.0 {
+            self.en_passant = (true, moveop.set_enpassant.1);
+        } else {
+            self.en_passant = (false, 0);
+        }
+
+        // deal with castling...
+        if self.squares[from_index].piece == PieceType::Rook {
+            let castle: &mut (bool, bool) = match self.squares[from_index].color {
+                Color::White => &mut self.castling.0,
+                Color::Black => &mut self.castling.1,
+            };
+
+            if castle.0 && (from_index % self.shape.1 == self.shape.1 - 1){ // king side
+                castle.0 = false;
+            } else if castle.1 && (from_index % self.shape.1 == 0) { // queen side
+                castle.1 = false;
+            }
+
+        } else if self.squares[from_index].piece == PieceType::King {
+            if moveop.is_castle {
+                // Create a secondary move that isn't a castle, but moves the rook to where it needs to go
+                let castle_from_index: usize;
+                let castle_to_index: usize;
+
+                if (moveop.from as i16) - (moveop.to as i16) > 0 { // queen side
+                    castle_from_index = moveop.from - 4;
+                    castle_to_index = moveop.to + 1;
+                } else { // king side
+                    castle_from_index = moveop.from + 3;
+                    castle_to_index = moveop.to - 1;
+                }
+
+                self.apply_move(MoveOp {
+                    from: castle_from_index,
+                    to: castle_to_index,
+                    ..Default::default()
+                })
+            }
+            
+            if self.squares[from_index].color == Color::White {
+                self.castling.0 = (false, false);
+            } else {
+                self.castling.1 = (false, false);
+            }
+        }
+
+        // deal with 50 move rule...
+        if capture || self.squares[from_index].piece == PieceType::Pawn {
+            self.halfmove_clock = 50;
+        } else {
+            self.halfmove_clock -= 1;
+        }
+
+        if self.halfmove_clock == 0 {
+            self.result = GameResult::Draw50Moves;
+        }
+
         self.squares[moveop.to] = self.squares[moveop.from];
         self.squares[moveop.from].piece = PieceType::Empty;
     }
 
-    fn apply_move_nomut(&self, moveop: MoveOp) -> Self {
+    pub fn apply_move_nomut(&self, moveop: MoveOp) -> Self {
         let mut child: Self = self.clone();
         child.apply_move(moveop);
 
         child
     }
 
-    fn get_sliding_moves(&self, piece: PieceType)->Vec<MoveOp> {
-        let indices: &Vec<usize> = self.get_table(piece);
+    fn get_sliding_moves_single(&self, piece: PieceType, start_index: usize)->Vec<MoveOp> {
+        let start_sq = self.squares[start_index];
         let mut moves: Vec<MoveOp> = Vec::new();
 
-        let height = self.shape.0;
-        let width = self.shape.1;
+        let mut index: i16 = 0;
+        
+        let mut target: Square;
 
-        for &start_index in indices {
-            let start_sq = self.squares[start_index];
+        let mut incs: Vec<i16> = Vec::new();
+        let mut newmove: MoveOp;
+        let rook_incs: Vec<i16> = vec![8, -8, 1, -1];
+        let bishop_incs: Vec<i16> = vec![9, 7, -7, -9];
 
-            let mut index: i16 = 0;
+        if piece == PieceType::Rook{
+            incs.extend(&rook_incs);
+        }
+        else if piece == PieceType::Bishop {
+            incs.extend(&bishop_incs);
+        }
+        else if piece == PieceType::Queen {
+            incs.extend(&rook_incs);
+            incs.extend(&bishop_incs);
+        }
+
+        for inc in incs{ // down, up, left, right
             let mut eob_flag: bool = false;
-            
-            let mut target: Square;
+            loop {
+                index += inc;
+                let target_index = ((start_index as i16) + index) as usize;
 
-            let mut incs: Vec<i16> = Vec::new();
-            let mut newmove: MoveOp;
-            let rook_incs: Vec<i16> = vec![8, -8, 1, -1];
-            let bishop_incs: Vec<i16> = vec![9, 7, -7, -9];
+                if target_index >= self.shape.0 * self.shape.1 || eob_flag {
+                    break;
+                }
 
-            if piece == PieceType::Rook{
-                incs.extend(&rook_incs);
-            }
-            else if piece == PieceType::Bishop {
-                incs.extend(&bishop_incs);
-            }
-            else if piece == PieceType::Queen {
-                incs.extend(&rook_incs);
-                incs.extend(&bishop_incs);
-            }
+                if target_index % self.shape.1 == 0|| target_index % self.shape.1 == self.shape.1 - 1 {
+                    eob_flag = true;
+                }
+                
+                target = self.squares[target_index];
+                
+                if target.color == start_sq.color {
+                    break;
+                }
 
-            for inc in incs{ // down, up, left, right
-                eob_flag = false;
-                loop {
-                    index += inc;
-                    let target_index = ((start_index as i16) + index) as usize;
+                newmove = MoveOp {
+                    from: start_index,
+                    to: target_index,
+                    ..Default::default()
+                };
 
-                    if      (target_index < 0) 
-                         || (target_index >= self.shape.0 * self.shape.1)
-                         || eob_flag {
-                             break;
-                         }
-
-                    if target_index % self.shape.1 == 0|| target_index % self.shape.1 == self.shape.1 - 1 {
-                        eob_flag = true;
-                    }
-                    
-                    target = self.squares[target_index];
-                    
-                    if target.color == start_sq.color {
-                        break;
-                    }
-
-                    newmove = MoveOp {
-                        from: start_index,
-                        to: target_index,
-                        set_enpassant: (false, 0),
-                    };
-
-                    if (target.color != start_sq.color) && (target.piece != PieceType::Empty) {
-                        moves.push(newmove);
-                        break;
-                    }
-                    index = 0;
+                if (target.color != start_sq.color) && (target.piece != PieceType::Empty) {
+                    moves.push(newmove);
+                    break;
                 }
                 index = 0;
             }
+            index = 0;
+        }
+
+        moves
+    }
+    
+    fn get_sliding_moves(&self, piece: PieceType)->Vec<MoveOp> {
+        let indices: Vec<usize> = self.get_table_colored(piece, self.to_play);
+        let mut moves: Vec<MoveOp> = Vec::new();
+
+
+        for start_index in indices {
+            moves.append(&mut self.get_sliding_moves_single(piece, start_index));
+        }
+
+        moves
+    }
+
+    fn get_knight_moves_single(&self, start_index: usize)->Vec<MoveOp> {
+        let mut moves: Vec<MoveOp> = Vec::new();
+        let start_sq = self.squares[start_index as usize];
+        let mut target_sq: Square;
+        let mut index_horiz_shift: i16;
+        let mut dist_closest_edge: i16;
+        let incs: Vec<i16> = vec![-10, -6, -17, -15, 6, 10, 16, 17];
+        let loc = ((start_index as i16) >> 3, (start_index as i16) - ((start_index as i16) & 0x7ff8));
+    
+        for inc in incs { // all knight moves
+            let target_index = ((start_index as i16) + inc) as usize;
+            let target_loc = ((target_index as i16) >> 3, (target_index as i16) - ((target_index as i16) & 0x7ff8));
+            index_horiz_shift = target_loc.1 - loc.1;
+
+            if loc.1 < 4 {
+                dist_closest_edge = loc.1;
+            } else {
+                dist_closest_edge = 8 - loc.1;
+            }
+            
+            if target_index >= self.shape.0 * self.shape.1
+            || index_horiz_shift.abs() > dist_closest_edge {
+                continue;
+            }
+
+            target_sq = self.squares[target_index as usize];
+
+            if target_sq.color == start_sq.color {
+                continue;
+            }
+
+            moves.push(MoveOp {
+                from: start_index,
+                to: target_index,
+                ..Default::default()
+            });
         }
 
         moves
     }
 
     fn get_knight_moves(&self)->Vec<MoveOp> {
-        let indices = self.get_table(PieceType::Knight);
+        let indices = self.get_table_colored(PieceType::Knight, self.to_play);
         let mut moves: Vec<MoveOp> = Vec::new();
 
-        for &start_index in indices {
-            let start_sq = self.squares[start_index as usize];
-            let mut target_sq: Square;
-            let mut index_horiz_shift: i16;
-            let mut dist_closest_edge: i16;
-            let mut newmove: MoveOp;
-            let incs: Vec<i16> = vec![-10, -6, -17, -15, 6, 10, 16, 17];
-            let loc = ((start_index as i16) >> 3, (start_index as i16) - ((start_index as i16) & 0x7ff8));
-        
-            for inc in incs { // all knight moves
-                let target_index = ((start_index as i16) + inc) as usize;
-                let target_loc = ((target_index as i16) >> 3, (target_index as i16) - ((target_index as i16) & 0x7ff8));
-                index_horiz_shift = target_loc.1 - loc.1;
-
-                if loc.1 < 4 {
-                    dist_closest_edge = loc.1;
-                } else {
-                    dist_closest_edge = 8 - loc.1;
-                }
-                
-                if target_index >= self.shape.0 * self.shape.1
-                || index_horiz_shift.abs() > dist_closest_edge {
-                    continue;
-                }
-
-                target_sq = self.squares[target_index as usize];
-
-                if target_sq.color == start_sq.color {
-                    continue;
-                }
-
-                moves.push(MoveOp {
-                    from: start_index,
-                    to: target_index,
-                    set_enpassant: (false, 0),
-                });
-            }
+        for start_index in indices {
+            moves.append(&mut self.get_knight_moves_single(start_index));
         }
         
         moves
     }
     
     fn get_king_moves(&self)->Vec<MoveOp> {
-        let indices = self.get_table(PieceType::King);
+        let indices = self.get_table_colored(PieceType::King, self.to_play);
         let mut moves: Vec<MoveOp> = Vec::new();
-        for &start_index in indices {
-            let mut newmove: MoveOp;
-
+        for start_index in indices {
             let start_sq = self.squares[start_index];
             let incs: Vec<i16> = vec![-9, -8, -7, -1, 1, 7, 8, 9];
         
@@ -472,26 +569,11 @@ impl Board {
                 if target_sq.color == start_sq.color {
                     continue;
                 }
-/*
-                let enemy_pieces = [
-                    self.get_table(PieceType::King),
-                    self.get_table(PieceType::Queen),
-                    self.get_table(PieceType::Bishop),
-                    self.get_table(PieceType::Knight),
-                    self.get_table(PieceType::Rook),
-                    self.get_table(PieceType::Pawn),
-                ].iter().reduce(|a, b| {
-                    let mut A: &Vec<usize> = a.clone();
-                    let mut B: &Vec<usize> = b.clone();
-                    B.append(A);
 
-                    B
-                });
- */
                 moves.push(MoveOp{
                     from: start_index,
                     to: target_index,
-                    set_enpassant: (false, 0),
+                    ..Default::default()
                 });
             }
         }
@@ -499,73 +581,77 @@ impl Board {
         moves
     }
 
-    /*
-    fn get_pawn_moves(&self, loc: (i16, i16))->Vec<Move> {
-        let start_index: i16 = loc.0 * 8 + loc.1;
-        let start_sq = self.squares[start_index as usize];
-        let mut target_sq: Square;
-        let mut target_index: i16;
-        let mut target_loc: (i16, i16) = (0,0);
-        let mut moves: Vec<Move> = Vec::new();
-        let mut index_horiz_shift: i16;
-        let mut dist_closest_edge: i16;
-        let mut newmove: Move;
-        let mut double_advance: bool = false;
-        let mut pass_enpassant: bool = false;
+    fn get_pawn_moves_single(&self, start_index: usize, c: Color)->Vec<MoveOp> {
+        let mut moves: Vec<MoveOp> = Vec::new();
 
-        let direction: i16 = match self.squares[start_index as usize].color{
+        let direction: i16 = match c {
             Color::White => -1,
-            Color::Black => 1,
-            Color::Empty => 0,
+            Color::Black =>  1,
         };
 
-        if !direction {
-            return moves;
-        }
-
-        if (self.squares[start_index as usize].color == Color::White && loc.1 == 6)
-        || (self.squares[start_index as usize].color == Color::Black && loc.1 == 1) {
-            double_advance = true;
-        }
+        let advance1: usize = start_index + (direction * self.shape.1 as i16) as usize;
         
-        target_index = start_index + 8 * direction;
-        if target_index < 64 && target_index >= 0 && self.squares[target_index as usize].color == Color::Empty{ // pawn can move forward
-            moves.push(Move{
+        if self.squares[advance1].piece == PieceType::Empty {
+            moves.push(MoveOp {
                 from: start_index,
-                to: target_index,
-                set_enpassant: (false, 0, 0),
+                to: advance1,
+                ..Default::default()
             });
 
-            target_index += 8*direction;
-            if double_advance && self.squares[target_index as usize].color == Color::Empty { // We can double advance
-                if (start_index % 8) != 7{
-                    if self.board.squares[target_index+1].color != Color::Empty && self.board.squares[target_index+1] != self.board.squares[start_index].color {
-                        moves.push(Move{
-                            from: start_index,
-                            to: target_index,
-                            set_enpassant: (true, (target_index-8*direction)%8, (target_index-8*direction)/8),
-                        });
-                    }
-                } else if start_index % 8 != 0 {
-                    if self.board.squares[target_index-1].color != Color::Empty && self.board.squares[target_index-1] != self.board.squares[start_index].color {
-                        moves.push(Move{
-                            from: start_index,
-                            to: target_index,
-                            set_enpassant: (true, (target_index-8*direction)%8, (target_index-8*direction)/8),
-                        });
-                } else {
-                    moves.push(Move{
-                        from: start_index,
-                        to: target_index,
-                        set_enpassant: (false, 0, 0),
-                    });
-                }
+            let advance2: usize = start_index + (2 * direction * self.shape.1 as i16) as usize;
+
+            if self.squares[advance2].piece == PieceType::Empty {
+                moves.push(MoveOp {
+                    from: start_index,
+                    to: advance2,
+                    set_enpassant: (true, advance1),
+                    ..Default::default()
+                });
+            }
+        }
+
+        let mut attack_indices: Vec<usize> = Vec::new();
+
+        if start_index % self.shape.1 != 0 {
+            attack_indices.push(start_index + (direction * self.shape.1 as i16) as usize - 1);
+        }
+
+        if start_index % self.shape.1 != self.shape.1 - 1 {
+            attack_indices.push(start_index + (direction * self.shape.1 as i16) as usize + 1);
+        }
+
+        for index in attack_indices {
+            if self.squares[index].piece != PieceType::Empty && self.squares[index].color != c{
+                moves.push(MoveOp {
+                    from: start_index,
+                    to: index,
+                    ..Default::default()
+                });
+            } 
+
+            if self.en_passant.0 && index == self.en_passant.1 {
+                moves.push(MoveOp{
+                    from: start_index,
+                    to: index,
+                    is_enpassant: true,
+                    ..Default::default()
+                })
             }
         }
 
         moves
     }
-    */
+
+    fn get_pawn_moves(&self)->Vec<MoveOp> {
+        let indices = self.get_table_colored(PieceType::Pawn, self.to_play);
+        let mut moves: Vec<MoveOp> = Vec::new();
+        for start_index in indices {
+            moves.append(&mut self.get_pawn_moves_single(start_index, self.to_play));
+        }
+
+        moves
+    }
+
 
     fn get_all_moves(&self) -> Vec<MoveOp> {
         let mut moves: Vec<MoveOp> = Vec::new();
@@ -574,7 +660,21 @@ impl Board {
         moves.extend(self.get_sliding_moves(PieceType::Bishop));
         moves.extend(self.get_sliding_moves(PieceType::Rook));
         moves.extend(self.get_knight_moves());
-        
+
+        moves
+    }
+
+    fn get_legal_moves(&self) -> Vec<MoveOp> {
+        let candidates = self.get_all_moves();
+        let mut moves: Vec<MoveOp> = Vec::new();
+        for m in &candidates {
+            let newboard = self.apply_move_nomut(*m);
+            let kingloc = newboard.get_table_colored(PieceType::King, self.to_play)[0];
+            if !newboard.get_all_moves().into_iter().map(|m| m.to).any(|i| i == kingloc){
+                moves.push(*m);
+            }
+        }
+
         moves
     }
 }
@@ -586,7 +686,7 @@ impl Default for Board {
             shape: (8, 8),
             piece_map: HashMap::new(),
             to_play: Color::White,
-            castling: (false, false, false, false),
+            castling: ((false, false), (false, false)),
             en_passant: (false, 0),
             halfmove_clock: 0,
             fullmove_number: 0,
@@ -601,12 +701,16 @@ impl fmt::Display for Board {
     }
 }
 
-pub fn board_test() {
-    let mut board: Board = Board::default();
-    println!("ahhh yes... chess.");
-    println!("{}", board);
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn board_test() {
+        let mut board: crate::board::Board = crate::board::Board::default();
+        println!("ahhh yes... chess.");
+        println!("{}", board);
 
-    board = Board::from_fen(START_FEN).unwrap();
-    println!("board has been initialized from FEN string: {}\n", START_FEN);
-    println!("{}", board);
+        board = crate::board::Board::from_fen(crate::board::START_FEN).unwrap();
+        println!("board has been initialized from FEN string: {}\n", crate::board::START_FEN);
+        println!("{}", board);
+    }
 }

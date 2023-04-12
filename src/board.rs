@@ -4,11 +4,11 @@ use std::collections::HashMap;
 use regex::Regex;
 use lazy_static::lazy_static;
 
-const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-const PIECE_MAP: [char; 7] = ['.', 'P', 'R', 'N', 'B', 'Q', 'K'];
+pub const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+pub const PIECE_MAP: [char; 7] = ['.', 'P', 'R', 'N', 'B', 'Q', 'K'];
 macro_rules! CORRUPT_BOARD_PANIC_MSG{()=>("board hash tables corrupted, bailing...")}
 
-#[derive(Copy,Clone,Eq,PartialEq,Default)]
+#[derive(Copy,Clone,Eq,PartialEq,Hash,Default)]
 pub enum Color {
     #[default] White,
                Black,
@@ -42,7 +42,7 @@ pub enum GameResult {
 }
 
 #[derive(Default,Copy,Clone,Eq,PartialEq)]
-struct Square {
+pub struct Square {
     color: Color,
     piece: PieceType,
 }
@@ -72,15 +72,15 @@ impl Default for MoveOp {
 
 #[derive(Clone)]
 pub struct Board {
-    squares: Vec<Square>,
-    shape: (usize, usize), // (height, width)
-    piece_map: HashMap<PieceType, Vec<usize>>,
-    to_play: Color,
-    castling: ((bool, bool), (bool, bool)), // KQkq
-    en_passant: (bool,usize), // flag, coords behind pawn to be captured
-    halfmove_clock: u16,
-    fullmove_number: u16,
-    result: GameResult,
+    pub squares: Vec<Square>,
+    pub shape: (usize, usize), // (height, width)
+    pub piece_map: HashMap<PieceType, Vec<usize>>,
+    pub to_play: Color,
+    pub castling: ((bool, bool), (bool, bool)), // KQkq
+    pub en_passant: (bool,usize), // flag, coords behind pawn to be captured
+    pub halfmove_clock: u16,
+    pub fullmove_number: u16,
+    pub result: GameResult,
 }
 
 impl Board {
@@ -162,7 +162,7 @@ impl Board {
         rank*self.shape.1 + file
     }
 
-    fn from_fen(fen_string: &str)->Result<Board, i16> {
+    pub fn from_fen(fen_string: &str)->Result<Board, i16> {
         lazy_static!{
             static ref FEN_EXP: Regex = Regex::new(r"^((?:[rnbqkpRNBQKP1-8]+/?){8})\s+([wb])\s+([KQkq\-]+)\s+([\-a-h1-8]+)\s+(\d)\s+(\d)").unwrap();
         }
@@ -412,6 +412,15 @@ impl Board {
 
         self.squares[moveop.to] = self.squares[moveop.from];
         self.squares[moveop.from].piece = PieceType::Empty;
+
+        self.to_play = match self.to_play {
+            Color::Black => Color::White,
+            Color::White => Color::Black,
+        };
+
+        if self.to_play == Color::White {
+            self.fullmove_number += 1;
+        }
     }
 
     pub fn apply_move_nomut(&self, moveop: MoveOp) -> Self {
@@ -703,14 +712,25 @@ impl fmt::Display for Board {
 
 #[cfg(test)]
 mod tests {
+
+    use crate::board::*;
     #[test]
     fn board_test() {
-        let mut board: crate::board::Board = crate::board::Board::default();
+        let mut board: Board = Board::default();
         println!("ahhh yes... chess.");
-        println!("{}", board);
+        println!("{}\n", board);
 
-        board = crate::board::Board::from_fen(crate::board::START_FEN).unwrap();
+        board = Board::from_fen(START_FEN).unwrap();
         println!("board has been initialized from FEN string: {}\n", crate::board::START_FEN);
+        println!("{}\n", board);
+
+        // Play the ruy...
+        board.apply_move(MoveOp{from: 52, to: 36, is_enpassant: false, is_castle: false, set_enpassant: (false, 0), promote: PieceType::Empty});
+        board.apply_move(MoveOp{from: 12, to: 28, is_enpassant: false, is_castle: false, set_enpassant: (false, 0), promote: PieceType::Empty});
+        board.apply_move(MoveOp{from: 62, to: 45, is_enpassant: false, is_castle: false, set_enpassant: (false, 0), promote: PieceType::Empty});
+        board.apply_move(MoveOp{from: 1, to: 18, is_enpassant: false, is_castle: false, set_enpassant: (false, 0), promote: PieceType::Empty});
+        board.apply_move(MoveOp{from: 61, to: 25, is_enpassant: false, is_castle: false, set_enpassant: (false, 0), promote: PieceType::Empty});
+
         println!("{}", board);
     }
 }

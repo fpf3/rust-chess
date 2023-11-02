@@ -2,6 +2,7 @@ use eframe::egui;
 use epaint;
 use std::collections::HashMap;
 mod board;
+use std::cmp::min;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
@@ -32,6 +33,7 @@ impl Default for ChessApp {
 impl ChessApp{
     const DARK_SQ_COLOR: epaint::Color32 =  epaint::Color32::from_rgb(115,66,7);
     const LIGHT_SQ_COLOR: epaint::Color32 = epaint::Color32::from_rgb(237,178,107);
+    const DEF_SQ_SIZE: f32 = 75.;
 
     fn gen_piece_assets() -> HashMap<(board::Color, board::PieceType), egui_extras::RetainedImage> {
         HashMap::from([
@@ -92,6 +94,7 @@ impl ChessApp{
 impl eframe::App for ChessApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
+            let total_window = ui.available_size();
             ui.heading(match self.game.to_play {
                 board::Color::White => "White to play...",
                 board::Color::Black => "Black to play..."
@@ -99,17 +102,30 @@ impl eframe::App for ChessApp {
 
             ui.separator();
 
-            let painter = egui::Painter::new(egui::Context::default(), egui::layers::LayerId::new(
+            let draw_window = ui.available_size();
+
+            let painter = egui::Painter::new(ctx.clone(), egui::layers::LayerId::new(
                 egui::layers::Order::Foreground,
                 egui::Id::new("master painter")),
-                egui::Rect::from_min_size(egui::Pos2::ZERO, ui.available_size())
+                egui::Rect::from_min_size(egui::Pos2::ZERO, draw_window)
             );
 
-            //ui.add(egui::Painter);
+
+            let sq_size = f32::min(Self::DEF_SQ_SIZE, f32::min(draw_window.x/8., draw_window.y/8.));
+
+            let mut x_pad = (|x: &f32| {
+                if x < &Self::DEF_SQ_SIZE {
+                    0.
+                } else {
+                    (draw_window.x - (8.*x)) / 2.
+                }
+            })(&(draw_window.x/8.));
+
+            let y_pad = total_window.y - draw_window.y;
 
             for j in 0..self.game.shape.1 {
                 for i in 0..self.game.shape.0 {
-                    let index = i*self.game.shape.1 + j;
+                    //let index = i*self.game.shape.1 + j;
                     let square_color = match (i^j)&1 {
                         0 => Self::LIGHT_SQ_COLOR,
                         1 => Self::DARK_SQ_COLOR,
@@ -117,8 +133,8 @@ impl eframe::App for ChessApp {
                     };
 
                     let thisrect = egui::Rect{
-                        min: egui::Pos2{x: (j as f32) * 50., y: (i as f32) * 50.},
-                        max: egui::Pos2{x: (j as f32) * 50. + 50., y: (i as f32) * 50. + 50.},
+                        min: egui::Pos2{x: (j as f32) * sq_size + x_pad, y: (i as f32) * sq_size + y_pad},
+                        max: egui::Pos2{x: ((j as f32)+1.) * sq_size + x_pad, y: ((i as f32)+1.) * sq_size + y_pad},
                     };
 
                     painter.rect_filled(thisrect, 0.0, square_color);

@@ -43,8 +43,8 @@ pub enum GameResult {
 
 #[derive(Default,Copy,Clone,Eq,PartialEq)]
 pub struct Square {
-    color: Color,
-    piece: PieceType,
+    pub color: Color,
+    pub piece: PieceType,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]

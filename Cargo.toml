@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eframe = "0.21.3"
-egui = "0.21.0"
-egui_extras = { version = "0.21.0", features = ["svg"] }
-epaint = "0.21.0"
+eframe = "0.28.1"
+egui = "0.28.1"
+egui_extras = { version = "0.28.1", features = ["svg"] }
+epaint = "0.28.1"
 glutin = "0.30.7"
 lazy_static = "1.4.0"
 mold = "0.0.1"

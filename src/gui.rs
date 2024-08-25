@@ -1,4 +1,5 @@
 use eframe::egui;
+use eframe::egui::include_image;
 use eframe::egui::pos2;
 
 use epaint::{
@@ -12,7 +13,7 @@ use crate::board;
 
 pub struct ChessGUI {
     game: board::Board,
-    piece_assets: HashMap<(board::Color, board::PieceType), egui_extras::RetainedImage>
+    piece_assets: HashMap<(board::Color, board::PieceType), egui::Image>
 }
 
 impl Default for ChessGUI {
@@ -29,73 +30,26 @@ impl ChessGUI{
     const LIGHT_SQ_COLOR: epaint::Color32 = epaint::Color32::from_rgb(237,178,107);
     const DEF_SQ_SIZE: f32 = 75.;
 
-    fn gen_piece_assets() -> HashMap<(board::Color, board::PieceType), egui_extras::RetainedImage> {
+    fn gen_piece_assets() -> HashMap<(board::Color, board::PieceType), egui::Image> {
         HashMap::from([
-            ((board::Color::White, board::PieceType::Pawn), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/white_pawn.svg",
-                include_bytes!("../resource/svg/pieces/white_pawn.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::White, board::PieceType::King), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/white_king.svg",
-                include_bytes!("../resource/svg/pieces/white_king.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::White, board::PieceType::Queen), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/white_queen.svg",
-                include_bytes!("../resource/svg/pieces/white_queen.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::White, board::PieceType::Bishop), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/white_bishop.svg",
-                include_bytes!("../resource/svg/pieces/white_bishop.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::White, board::PieceType::Knight), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/white_knight.svg",
-                include_bytes!("../resource/svg/pieces/white_knight.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::White, board::PieceType::Rook), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/white_rook.svg",
-                include_bytes!("../resource/svg/pieces/white_rook.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::Black, board::PieceType::Pawn), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/black_pawn.svg",
-                include_bytes!("../resource/svg/pieces/black_pawn.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::Black, board::PieceType::King), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/black_king.svg",
-                include_bytes!("../resource/svg/pieces/black_king.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::Black, board::PieceType::Queen), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/black_queen.svg",
-                include_bytes!("../resource/svg/pieces/black_queen.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::Black, board::PieceType::Bishop), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/black_bishop.svg",
-                include_bytes!("../resource/svg/pieces/black_bishop.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::Black, board::PieceType::Knight), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/black_knight.svg",
-                include_bytes!("../resource/svg/pieces/black_knight.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
-            ((board::Color::Black, board::PieceType::Rook), egui_extras::RetainedImage::from_svg_bytes_with_size(
-                "../resource/svg/pieces/black_rook.svg",
-                include_bytes!("../resource/svg/pieces/black_rook.svg"),
-                egui_extras::image::FitTo::Original,
-            ).unwrap()),
+            ((board::Color::White, board::PieceType::Pawn),     egui::Image::new(egui::include_image!("../resource/svg/pieces/white_pawn.svg"))),
+            ((board::Color::White, board::PieceType::King),     egui::Image::new(egui::include_image!("../resource/svg/pieces/white_king.svg"))),
+            ((board::Color::White, board::PieceType::Queen),    egui::Image::new(egui::include_image!("../resource/svg/pieces/white_queen.svg"))),
+            ((board::Color::White, board::PieceType::Bishop),   egui::Image::new(egui::include_image!("../resource/svg/pieces/white_bishop.svg"))),
+            ((board::Color::White, board::PieceType::Knight),   egui::Image::new(egui::include_image!("../resource/svg/pieces/white_knight.svg"))),
+            ((board::Color::White, board::PieceType::Rook),     egui::Image::new(egui::include_image!("../resource/svg/pieces/white_rook.svg"))),
+            ((board::Color::Black, board::PieceType::Pawn),     egui::Image::new(egui::include_image!("../resource/svg/pieces/black_pawn.svg"))),
+            ((board::Color::Black, board::PieceType::King),     egui::Image::new(egui::include_image!("../resource/svg/pieces/black_king.svg"))),
+            ((board::Color::Black, board::PieceType::Queen),    egui::Image::new(egui::include_image!("../resource/svg/pieces/black_queen.svg"))),
+            ((board::Color::Black, board::PieceType::Bishop),   egui::Image::new(egui::include_image!("../resource/svg/pieces/black_bishop.svg"))),
+            ((board::Color::Black, board::PieceType::Knight),   egui::Image::new(egui::include_image!("../resource/svg/pieces/black_knight.svg"))),
+            ((board::Color::Black, board::PieceType::Rook),     egui::Image::new(egui::include_image!("../resource/svg/pieces/black_rook.svg"))),
         ])
     }
 }
 
 impl eframe::App for ChessGUI {
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             let total_window = ui.available_size();
@@ -117,7 +71,7 @@ impl eframe::App for ChessGUI {
 
             let sq_size = f32::min(Self::DEF_SQ_SIZE, f32::min(draw_window.x/8., draw_window.y/8.));
 
-            let mut x_pad = (|x: &f32| {
+            let x_pad = (|x: &f32| {
                 if x < &Self::DEF_SQ_SIZE {
                     0.
                 } else {
@@ -145,13 +99,10 @@ impl eframe::App for ChessGUI {
                     painter.rect_filled(thisrect, 0.0, square_color);
 
 
-                    match self.piece_assets.get(&(square.color, square.piece)) {
-                        Some(s) => painter.image(
-                            s.texture_id(&ctx),
-                            thisrect,
-                            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
-                            Color32::WHITE
-                        ),
+                    match &self.piece_assets.get(&(square.color, square.piece)) {
+                        Some(s) => s
+                            .max_width(sq_size)
+                            .paint_at(ui, thisrect),
                         _ => (),
                     };
                 } 
